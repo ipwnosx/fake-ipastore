@@ -11,6 +11,8 @@
 |
 */
 
+use FakeIpastore\Jobs\ProcessSignRequest;
+use FakeIpastore\Models\SignRequest;
 use Illuminate\Http\Request;
 
 Route::get('/', function () {
@@ -112,9 +114,23 @@ Route::any('/api/verifyuser.php', function (Request $request) {
 
 
 Route::any('/api_v3/resign_task.php', function (Request $request) {
+    $signRequest = new SignRequest([
+        'status' => SignRequest::STATUS_NEW,
+        'udid' => $request->input('udid'),
+        'icon' => $request->input('icon'),
+        'bid' => $request->input('bid'),
+        'name' => $request->input('name'),
+        'aid' => $request->input('aid'),
+        'cert' => $request->input('cert'),
+    ]);
+
+    $signRequest->save();
+
+    ProcessSignRequest::dispatch($signRequest);
+
     $response = [
-        "status" => "queue",
-        "info" => "1512899509",
+        'status' => 'queue',
+        'info' => $signRequest->id,
     ];
 
     return $response;

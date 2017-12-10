@@ -29,5 +29,11 @@ use Illuminate\Database\Eloquent\Model;
  */
 class SignRequest extends Model
 {
-    //
+    const STATUS_NEW = 0;
+    const STATUS_REQUEST_SENT = 1;
+    const STATUS_DOWNLOADED = 2;
+    const STATUS_SIGNING = 3;
+    const STATUS_DONE = 100;
+
+    protected $guarded = [];
 }

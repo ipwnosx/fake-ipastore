@@ -15,12 +15,14 @@ class CreateSignRequestsTable extends Migration
     {
         Schema::create('sign_requests', function (Blueprint $table) {
             $table->increments('id');
+            $table->integer('status')->default(0);
             $table->string('udid')->nullable();
             $table->string('icon')->nullable();
             $table->string('bid')->nullable();
             $table->string('name')->nullable();
             $table->string('aid')->nullable();
             $table->string('cert')->nullable();
+            $table->string('ipa_file')->nullable();
             $table->timestamps();
         });
     }
