@@ -1,6 +1,6 @@
 <?php
 
-namespace FakeIpastore;
+namespace FakeIpastore\Models;
 
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Foundation\Auth\User as Authenticatable;
