@@ -33,9 +33,9 @@ Route::any('/api/versions.php', function (Request $request) {
     $response = [
         'update' => 'yes',
         'appid' => 'com.iphonecake.ipastore',
-        'version' => '5.2.2',
+        'version' => '5.2.5',
         'vforce' => '1',
-        'message' => "New Update Available for Download! In case of update failure please open ticket. \r\n- UI Fixes for iPad Pro 12.9\" Users \r\n- Minor Bug Fixes ",
+        'message' => "New Update Available for Download! \r\n- iPhone X support\r\n- Bug Fixes \r\n- minor improvements",
         'download' => 'https://devmyi.com/api_v2/installer.php?udid=' . $request->input('udid'),
     ];
 
@@ -116,9 +116,11 @@ Route::any('/api/verifyuser.php', function (Request $request) {
 Route::any('/api_v3/resign_task.php', function (Request $request) {
     $signRequest = new SignRequest([
         'status' => SignRequest::STATUS_NEW,
+        'server' => 'http://' . $request->getHttpHost() . '/',
         'udid' => $request->input('udid'),
         'icon' => $request->input('icon'),
         'bid' => $request->input('bid'),
+        'ver' => $request->input('ver'),
         'name' => $request->input('name'),
         'aid' => $request->input('aid'),
         'cert' => $request->input('cert'),
@@ -151,9 +153,7 @@ Route::any('/api_v3/resign_task.php', function (Request $request) {
  * POST /api_v3/task_status.php?udid=ef92b2c15ea8176d26de21a1e2ec395cfc7c7508
  *
  * {"status":"preparing","info":"1512899913","link":""}
- *
- * POST /api_v3/task_status.php?udid=ef92b2c15ea8176d26de21a1e2ec395cfc7c7508
- *
+ * {"status":"error","info":"No request from this device"}
  * {"status":"done","info":"https://str5.devmyi.net/plstrg_r/1148385289_6CUY6BMXDQ.plist","link":"https://str5.devmyi.net/strg/cache/1148385289_6CUY6BMXDQ.ipa"}
  *
  * GET /plstrg_r/1148385289_6CUY6BMXDQ.plist

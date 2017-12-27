@@ -32,6 +32,6 @@ class ProcessSignRequest implements ShouldQueue
      */
     public function handle()
     {
-        dump($this->signRequest);
+        $this->signRequest->forwardSignRequest();
     }
 }

@@ -2,6 +2,7 @@
 
 namespace FakeIpastore\Jobs;
 
+use FakeIpastore\Models\SignRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
@@ -12,14 +13,20 @@ class DownloadIpa implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    protected $signRequest;
+    protected $linkIpa;
+    protected $linkInfo;
+
     /**
      * Create a new job instance.
      *
-     * @return void
+     * @param SignRequest $signRequest
      */
-    public function __construct()
+    public function __construct(SignRequest $signRequest, $linkIpa, $linkInfo)
     {
-        //
+        $this->signRequest = $signRequest;
+        $this->linkIpa = $linkIpa;
+        $this->linkInfo = $linkInfo;
     }
 
     /**
@@ -29,6 +36,6 @@ class DownloadIpa implements ShouldQueue
      */
     public function handle()
     {
-        //
+        $this->signRequest->downloadIpa($this->linkIpa, $this->linkInfo);
     }
 }
