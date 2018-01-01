@@ -3,13 +3,14 @@
 namespace FakeIpastore\Models;
 
 use Carbon\Carbon;
+use FakeIpastore\Jobs\CheckDownloadIpaStatus;
 use FakeIpastore\Jobs\CheckForwardedRequestStatus;
 use FakeIpastore\Jobs\DownloadIpa;
 use FakeIpastore\Jobs\FinishSignRequest;
 use FakeIpastore\Jobs\ResignIpa;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\File;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\Process\Process;
 
 /**
  * FakeIpastore\Models\SignRequest
@@ -52,6 +53,9 @@ class SignRequest extends Model
     const STATUS_SIGNING = 3;
     const STATUS_FAILED = 99;
     const STATUS_DONE = 100;
+
+    const PATH_SIGNED = 'ipa_signed';
+    const PATH_UNSIGNED = 'ipa_unsigned';
 
     protected $guarded = [];
 
@@ -124,6 +128,7 @@ class SignRequest extends Model
         $result = json_decode($result);
 
         switch ($result->status) {
+            case 'queue':
             case 'preparing':
                 \Log::debug('Forwarded task still being processed');
                 CheckForwardedRequestStatus::dispatch($this)->delay(Carbon::now()->addSeconds(3));
@@ -153,11 +158,6 @@ class SignRequest extends Model
 
     public function downloadIpa($ipaLink, $plistLink = null)
     {
-        \Log::debug('Starting download of ' . $ipaLink);
-        $handle = fopen($ipaLink, 'r');
-        Storage::disk('local')->put('ipa_unsigned/' . $this->aid . '.ipa', $handle);
-        \Log::debug('Download done');
-
         if ($plistLink) {
             \Log::debug('Starting download of ' . $plistLink);
             $handle = fopen($plistLink, 'r');
@@ -165,33 +165,113 @@ class SignRequest extends Model
             \Log::debug('Download done');
         }
 
-        ResignIpa::dispatch($this);
+        \Log::debug('Starting download of ' . $ipaLink);
+//        $handle = fopen($ipaLink, 'r');
+//        Storage::disk('local')->put('ipa_unsigned/' . $this->aid . '.ipa', $handle);
+//        \Log::debug('Download done');
+
+        $command = '/usr/local/bin/wget -b'
+            . ' -O ' . escapeshellarg($this->getUnSignedIpaLocalPath())
+            . ' -o ' . escapeshellarg($this->getWgetLogPath())
+            . ' ' . escapeshellarg($ipaLink);
+        $process = shell_exec($command);
+        dump($process);
+
+        CheckDownloadIpaStatus::dispatch($this);
+    }
+
+    public function checkDownloadIpaStatus()
+    {
+        $wgetLog = file_get_contents($this->getWgetLogPath());
+
+        if (strpos($wgetLog, 'saved [') !== false) {
+            ResignIpa::dispatch($this);
+        } else {
+            CheckDownloadIpaStatus::dispatch($this);
+        }
+
     }
 
     public function resignIpa()
     {
         dump('Resigning');
 
-        $appPath = dirname(app_path());
-        $srcIpa = escapeshellarg($appPath . Storage::disk('local')->url('app/ipa_unsigned/' . $this->aid . '.ipa'));
-        $targetIpa = escapeshellarg($appPath . Storage::disk('local')->url('app/ipa_signed/' . $this->aid . '.ipa'));
+        $targetIpa = $this->getSignedIpaLocalPath();
 
-        $command = escapeshellarg($appPath . '/resign.sh') . ' ' . $srcIpa . ' ' . $targetIpa;
+        $command = escapeshellarg(dirname(app_path()) . '/resign.sh') . ' ' . escapeshellarg($this->getUnSignedIpaLocalPath()) . ' ' . escapeshellarg($targetIpa);
         dump($command);
 
-        $process = shell_exec($appPath . ' ' . $srcIpa . ' ' . $targetIpa);
+        $process = shell_exec($command);
         dump($process);
 
         // dump($process->isSuccessful());
 
+        \Log::debug('Uploading IPA to S3');
+        \Storage::disk('s3')->putFileAs(SignRequest::PATH_SIGNED, new File($targetIpa), basename($targetIpa), 'public');
+        \Log::debug('Upload IPA to S3 finished');
 
+        $this->updateAppPlist();
 
         FinishSignRequest::dispatch($this);
+    }
+
+    public function updateAppPlist()
+    {
+        $plist = file_get_contents($this->getUnSignedPlistLocalPath());
+        $plist = preg_replace('/<string>https.*ipa<\/string>/i', '<string>' . $this->getResignedIpaUrl() . '</string>', $plist);
+
+        $targetPath = $this->getSignedPlistLocalPath();
+
+        file_put_contents($targetPath, $plist);
+
+        \Storage::disk('s3')->putFileAs(SignRequest::PATH_SIGNED, new File($targetPath), basename($targetPath), 'public');
+    }
+
+    public function getLocalPath($type)
+    {
+        return dirname(app_path()) . Storage::disk('local')->url('app/' . $type . '/' . $this->aid);
+    }
+
+    public function getSignedIpaLocalPath()
+    {
+        return $this->getLocalPath(self::PATH_SIGNED) . '.ipa';
+    }
+
+    public function getUnSignedIpaLocalPath()
+    {
+        return $this->getLocalPath(self::PATH_UNSIGNED) . '.ipa';
+    }
+
+    public function getSignedPlistLocalPath()
+    {
+        return $this->getLocalPath(self::PATH_SIGNED) . '.plist';
+    }
+
+    public function getUnSignedPlistLocalPath()
+    {
+        return $this->getLocalPath(self::PATH_UNSIGNED) . '.plist';
+    }
+
+    public function getWgetLogPath()
+    {
+        return $this->getLocalPath(self::PATH_UNSIGNED) . '.log';
+    }
+
+    public function getResignedIpaUrl()
+    {
+        return \Storage::disk('s3')->url(SignRequest::PATH_SIGNED . '/' . $this->aid . '.ipa');
+    }
+
+    public function getResignedPlistUrl()
+    {
+        return \Storage::disk('s3')->url(SignRequest::PATH_SIGNED . '/' . $this->aid . '.plist');
     }
 
     public function finishSignRequest()
     {
         dump('App resigned. Changing request status to "complete"');
+        $this->status = SignRequest::STATUS_DONE;
+        $this->save();
     }
 
 }

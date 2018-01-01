@@ -139,6 +139,39 @@ Route::any('/api_v3/resign_task.php', function (Request $request) {
 });
 
 
+Route::any('/api_v3/task_status.php', function (Request $request) {
+
+    $signRequest = SignRequest::whereUdid($request->input('udid'))->orderBy('id', 'desc')->firstOrFail();
+
+    switch ($signRequest->status) {
+        case SignRequest::STATUS_FAILED:
+            $response = [
+                'status' => 'error',
+                'info' => 'Error',
+            ];
+            break;
+
+        case SignRequest::STATUS_DONE:
+            $response = [
+                'status' => 'done',
+                'info' => $signRequest->getResignedPlistUrl(),
+                'link' => $signRequest->getResignedIpaUrl(),
+            ];
+            break;
+
+        default:
+            $response = [
+                'status' => 'preparing',
+                'info' => $signRequest->id,
+                'link' => '',
+            ];
+    }
+
+    return $response;
+});
+
+
+
 // Replacing https://devmyi.com/api/get_udid.mobileconfig with https://devmyi.zyx/api/get_udid.mobileconfig... Done!
 
 
